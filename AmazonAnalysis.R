@@ -3,6 +3,7 @@ setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
 # Libraries
 library(vroom)
 library(tidymodels)
+library(embed)
 
 # Data
 AEA_train <- vroom("./train.csv")
@@ -23,6 +24,7 @@ AEA_test <- vroom("./test.csv")
 # Exploratory Plot 1
 DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
 # Exploratory Plot 2
+DataExplorer::plot_correlation(AEA_train)
 
 # Recipe
 my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
@@ -54,8 +56,52 @@ test_preds <- amazon_workflow %>%
   bind_cols(., AEA_test) %>%
   select(id, ACTION)
 
-vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
+#vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
 
 
+#################################
+# Penalized Logistic Regression #
+#################################
+my_recipe_penlog <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
+  step_mutate(ACTION = factor(ACTION), skip = TRUE) %>%
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  step_other(all_factor_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) #target encoding 
+
+my_mod <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
+set_engine("glmnet")
+
+amazon_workflow <- workflow() %>%
+add_recipe(my_recipe_penlog) %>%
+add_model(my_mod)
+
+## Grid of values to tune over
+tuning_grid <- grid_regular(penalty(),
+mixture(),
+levels = 4) ## L^2 total tuning possibilities
+
+## Split data for CV
+folds <- vfold_cv(AEA_train, v = 10, repeats=1)
+
+## Run the CV
+CV_results <- amazon_workflow %>%
+tune_grid(resamples=folds,
+grid=tuning_grid,
+metrics=metric_set(roc_auc)) #Or leave metrics NULL
+
+#####PENALIZED LOGISTIC IN R
+## Find Best Tuning Parameters
+bestTune <- CV_results %>%
+select_best("roc_auc")
+
+## Finalize the Workflow & fit it
+final_wf <-
+preg_wf %>%
+finalize_workflow(bestTune) %>%
+fit(data=myDataSet)
+
+## Predict
+final_wf %>%
+predict(new_data = myNewData, type="prob")
 
 
