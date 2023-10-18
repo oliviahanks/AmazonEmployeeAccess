@@ -85,23 +85,49 @@ folds <- vfold_cv(AEA_train, v = 10, repeats=1)
 
 ## Run the CV
 CV_results <- amazon_workflow %>%
-tune_grid(resamples=folds,
-grid=tuning_grid,
-metrics=metric_set(roc_auc)) #Or leave metrics NULL
+  tune_grid(resamples=folds,
+            grid=tuning_grid,
+            metrics=metric_set(roc_auc)) #Or leave metrics NULL
 
 #####PENALIZED LOGISTIC IN R
 ## Find Best Tuning Parameters
 bestTune <- CV_results %>%
-select_best("roc_auc")
+  select_best("roc_auc")
 
 ## Finalize the Workflow & fit it
-final_wf <-
-preg_wf %>%
-finalize_workflow(bestTune) %>%
-fit(data=myDataSet)
+final_wf <- amazon_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data=AEA_train)
 
 ## Predict
 final_wf %>%
-predict(new_data = myNewData, type="prob")
+  predict(new_data = AEA_train, type="prob")
 
+test_preds <- final_wf %>%
+  predict(amazon_workflow, new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
+  rename(ACTION = .pred_1) %>%
+  bind_cols(., AEA_test) %>%
+  select(id, ACTION)
+
+vroom_write(x=test_preds, file="./PenLogSubmission.csv", delim=",")
+
+
+############
+# RF Binary#
+############
+my_mod <- rand_forest(mtry = tune(),
+min_n=tune(),
+trees=1000) %>%
+set_engine("ranger") %>%
+set_mode("classification")
+
+## Create a workflow with model & recipe
+
+## Set up grid of tuning values
+
+## Set up K-fold CV
+
+## Find best tuning parameters
+
+## Finalize workflow and predict
 
