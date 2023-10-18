@@ -37,7 +37,7 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks vroom::spec()
 ✖ recipes::step()   masks stats::step()
-• Use suppressPackageStartupMessages() to eliminate package startup messages
+• Search for functions across packages at https://www.tidymodels.org/find/
 > library(embed)
 > 
 > # Data
@@ -71,7 +71,30 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > # ROLE_CODE - Company role code; this code is unique to each role (e.g. Manager)
 > 
 > # Exploratory Plot 1
-> DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
-Error in loadNamespace(x) : there is no package called ‘DataExplorer’
-Calls: loadNamespace -> withRestarts -> withOneRestart -> doWithOneRestart
-Execution halted
+> #DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
+> # Exploratory Plot 2
+> #DataExplorer::plot_correlation(AEA_train)
+> 
+> # Recipe
+> my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
++   step_mutate(ACTION = factor(ACTION), skip = TRUE) %>%
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
++   step_other(all_factor_predictors(), threshold = .01) %>%
++   step_dummy(all_nominal_predictors()) #create dummy variables
+>   
+> prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+> testbake <- bake(prepped_recipe, new_data=AEA_train)
+> # submit as predicted probabability of a one
+> 
+> 
+> my_mod <- logistic_reg() %>% #Type of model
++ set_engine("glm")
+> 
+> amazon_workflow <- workflow() %>%
++ add_recipe(my_recipe) %>%
++ add_model(my_mod) %>%
++ fit(data = AEA_train) # Fit the workflow
+> 
+> amazon_predictions <- predict(amazon_workflow
++                               , new_data=AEA_test
++                               , type="prob") # "class" or "prob" (see doc)
