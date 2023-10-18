@@ -17,7 +17,61 @@ Type 'demo()' for some demos, 'help()' for on-line help, or
 'help.start()' for an HTML browser interface to help.
 Type 'q()' to quit R.
 
-> setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
-Error in setwd("C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess") : 
-  cannot change working directory
+> #setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
+> 
+> # Libraries
+> library(vroom)
+> library(tidymodels)
+── Attaching packages ────────────────────────────────────── tidymodels 1.1.1 ──
+✔ broom        1.0.5     ✔ recipes      1.0.8
+✔ dials        1.2.0     ✔ rsample      1.2.0
+✔ dplyr        1.1.3     ✔ tibble       3.2.1
+✔ ggplot2      3.4.3     ✔ tidyr        1.3.0
+✔ infer        1.0.5     ✔ tune         1.1.2
+✔ modeldata    1.2.0     ✔ workflows    1.1.3
+✔ parsnip      1.1.1     ✔ workflowsets 1.0.1
+✔ purrr        1.0.2     ✔ yardstick    1.2.0
+── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
+✖ purrr::discard()  masks scales::discard()
+✖ dplyr::filter()   masks stats::filter()
+✖ dplyr::lag()      masks stats::lag()
+✖ yardstick::spec() masks vroom::spec()
+✖ recipes::step()   masks stats::step()
+• Use suppressPackageStartupMessages() to eliminate package startup messages
+> library(embed)
+> 
+> # Data
+> AEA_train <- vroom("./train.csv")
+Rows: 32769 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> AEA_test <- vroom("./test.csv")
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> # Columns
+> # ACTION - ACTION is 1 if the resource was approved, 0 if the resource was not
+> # RESOURCE - An ID for each resource
+> # MGR_ID - The EMPLOYEE ID of the manager of the current EMPLOYEE ID record; an employee may have only one manager at a time
+> # ROLE_ROLLUP_1 - Company role grouping category id 1 (e.g. US Engineering)
+> # ROLE_ROLLUP_2 - Company role grouping category id 2 (e.g. US Retail)
+> # ROLE_DEPTNAME - Company role department description (e.g. Retail)
+> # ROLE_TITLE - Company role business title description (e.g. Senior Engineering Retail Manager)
+> # ROLE_FAMILY_DESC - Company role family extended description (e.g. Retail Manager, Software Engineering)
+> # ROLE_FAMILY - Company role family description (e.g. Retail Manager)
+> # ROLE_CODE - Company role code; this code is unique to each role (e.g. Manager)
+> 
+> # Exploratory Plot 1
+> DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
+Error in loadNamespace(x) : there is no package called ‘DataExplorer’
+Calls: loadNamespace -> withRestarts -> withOneRestart -> doWithOneRestart
 Execution halted
