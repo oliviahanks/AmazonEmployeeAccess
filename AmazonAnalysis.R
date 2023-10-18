@@ -1,4 +1,4 @@
-setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
+#setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
 
 # Libraries
 library(vroom)
