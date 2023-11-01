@@ -33,7 +33,7 @@ folds <- vfold_cv(AEA_train, v = 5, repeats=1)
 #DataExplorer::plot_correlation(AEA_train)
 
 
-###################################
+
 ### Recipes #######################
 ###################################
 
@@ -86,7 +86,8 @@ testbake <- bake(prepped_recipe, new_data=AEA_train)
 
 
 
-###################################
+
+
 ### Logistic Regression ###########
 ###################################
 
@@ -111,7 +112,7 @@ test_preds <- logistic_workflow %>%
 vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
 
 
-###################################
+
 ### Penalized Logistic Regression #
 ###################################
 
@@ -152,7 +153,7 @@ test_preds <- final_wf %>%
 vroom_write(x=test_preds, file="./PenLogSubmission.csv", delim=",")
 
 
-###################################
+
 ### RF Binary #####################
 ###################################
 
@@ -198,7 +199,7 @@ test_preds <- final_wf %>%
 vroom_write(x=test_preds, file="./RFBinSubmission11.csv", delim=",")
 
 
-###################################
+
 ### Naive Bayes ###################
 ###################################
 
@@ -240,161 +241,9 @@ test_preds <- final_wf %>%
 vroom_write(x=test_preds, file="./RFBinSubmission.csv", delim=",")
 
 
-########################
-# KNN Model#
-########################
 
-## knn model
-knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-  set_mode("classification") %>%
-  set_engine("kknn")
-
-#use my_recipe_penlog
-knn_wf <- workflow() %>%
-  add_recipe(my_recipe_penlog) %>%
-  add_model(knn_model)
-
-## Fit or Tune Model HERE
-knn_tuning_grid <- grid_regular(neighbors(range = c(1,10)),
-                               level = 4)
-## Set up K-fold CV
-# use folds from above
-CV_results <- knn_wf %>%
-  tune_grid(resamples=folds,
-            grid=knn_tuning_grid,
-            metrics=metric_set(roc_auc)) #Or leave metrics NULL
-
-## Find best tuning parameters
-bestTune <- CV_results %>%
-  select_best("roc_auc")
-
-## Finalize workflow and predict
-final_wf <- knn_wf %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=AEA_train)
-
-## Predict
-test_preds <- knn_wf %>%
-  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-vroom_write(x=test_preds, file="./KnnSubmission.csv", delim=",")
-
-
+# KNN Model########################
 ###################################
-### Naive Bayes with pcs ##########
-###################################
-
-## nb model
-nb_model <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-set_mode("classification") %>%
-set_engine("naivebayes") # install discrim library for the naivebayes eng
-
-nb_wf <- workflow() %>%
-add_recipe(my_recipe_pcs) %>%
-add_model(nb_model)
-
-## Tune smoothness and Laplace here
-NB_tuning_grid <- grid_regular(Laplace(),
-                               smoothness())
-
-## Set up K-fold CV
-# use folds from above
-CV_results <- nb_wf %>%
-  tune_grid(resamples=folds,
-            grid=NB_tuning_grid,
-            metrics=metric_set(roc_auc)) #Or leave metrics NULL
-
-## Find best tuning parameters
-bestTune <- CV_results %>%
-  select_best("roc_auc")
-
-## Finalize workflow and predict
-final_wf <- nb_wf %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=AEA_train)
-
-## Predict
-test_preds <- final_wf %>%
-  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-vroom_write(x=test_preds, file="./NBpcs8Submission.csv", delim=",")
-
-
-
-#################################
-# 
-# amazon_train <- vroom("./train.csv")
-# amazon_test <- vroom("./test.csv")
-# 
-# rec <- recipe(ACTION~., data=amazon_train) %>%
-#   step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
-#   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-#   step_other(all_nominal_predictors(), threshold=0.001) %>%
-#   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
-#   step_normalize((all_numeric_predictors()))
-# 
-# folds <- vfold_cv(amazon_train, v = 5)
-# 
-# knn_mod <- nearest_neighbor(neighbors = tune()) %>%
-#   set_mode('classification') %>%
-#   set_engine('kknn')
-# 
-# knn_wf <- workflow() %>%
-#   add_recipe(rec) %>%
-#   add_model(knn_mod)
-# 
-# tune_grid <- grid_regular(neighbors(), levels = 10)
-# 
-# ## Set up K-fold CV
-# # use folds from above
-# CV_results <- knn_wf %>%
-#   tune_grid(resamples=folds,
-#             grid=tune_grid,
-#             metrics=metric_set(roc_auc)) #Or leave metrics NULL
-# 
-# ## Find best tuning parameters
-# bestTune <- CV_results %>%
-#   select_best("roc_auc")
-# 
-# ## Finalize workflow and predict
-# final_wf <- knn_wf %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data=amazon_train)
-# 
-# ## Predict
-# test_preds <- final_wf %>%
-#   predict(new_data=amazon_test, type="prob") %>% # "class" or "prob" (see doc)
-#   rename(ACTION = .pred_1) %>%
-#   bind_cols(., amazon_test) %>%
-#   select(id, ACTION)
-# 
-# vroom_write(x=test_preds, file="./KnnSubmission.csv", delim=",")
-# 
-# 
-
-
-
-
-################################
-### SMOTE Code #################
-################################
-
-
-###############
-# Naive Bayes #
-###############
-
-
-
-########################
-# KNN Model#
-########################
 
 knn_mod <- nearest_neighbor(neighbors = tune()) %>%
   set_mode('classification') %>%
@@ -432,8 +281,11 @@ test_preds <- final_wf %>%
 vroom_write(x=test_preds, file="./KnnSubmission2.csv", delim=",")
 
 
-# Naive Bayes with pcs
+
+
+### Naive Bayes with pcs ##########
 ###################################
+
 my_recipe_pcs <- recipe(ACTION ~ ., data=AEA_train) %>%
   step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
@@ -480,5 +332,6 @@ test_preds <- final_wf %>%
   select(id, ACTION)
 
 vroom_write(x=test_preds, file="./NBpcs8Submission.csv", delim=",")
+
 
 
