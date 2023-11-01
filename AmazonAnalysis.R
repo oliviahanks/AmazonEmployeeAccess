@@ -12,6 +12,9 @@ library(discrim)
 AEA_train <- vroom("./train.csv")
 AEA_test <- vroom("./test.csv")
 
+## Split data for CV
+folds <- vfold_cv(AEA_train, v = 5, repeats=1)
+
 # Columns
 # ACTION - ACTION is 1 if the resource was approved, 0 if the resource was not
 # RESOURCE - An ID for each resource
@@ -29,86 +32,119 @@ AEA_test <- vroom("./test.csv")
 # Exploratory Plot 2
 #DataExplorer::plot_correlation(AEA_train)
 
-# Recipe
-my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
+
+###################################
+### Recipes #######################
+###################################
+
+my_recipe <- my_recipe_best
+
+my_recipe_dummy <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
   step_mutate(ACTION = factor(ACTION), skip = TRUE) %>%
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
   step_other(all_factor_predictors(), threshold = .01) %>%
   step_dummy(all_nominal_predictors()) #create dummy variables
-  
-prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
-testbake <- bake(prepped_recipe, new_data=AEA_train)
-# submit as predicted probabability of a one
 
-
-my_mod <- logistic_reg() %>% #Type of model
-set_engine("glm")
-
-amazon_workflow <- workflow() %>%
-add_recipe(my_recipe) %>%
-add_model(my_mod) %>%
-fit(data = AEA_train) # Fit the workflow
-
-amazon_predictions <- predict(amazon_workflow
-                              , new_data=AEA_test
-                              , type="prob") # "class" or "prob" (see doc)
-
-test_preds <- amazon_workflow %>%
-  predict(amazon_workflow, new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-#vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
-
-
-#################################
-# Penalized Logistic Regression #
-#################################
-my_recipe_penlog <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
+my_recipe_target <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
   step_mutate(ACTION = factor(ACTION), skip = TRUE) %>%
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
   step_other(all_factor_predictors(), threshold = .001) %>%
   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>%
   step_normalize(all_numeric_predictors())#target encoding
 
-my_mod <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
-set_engine("glmnet")
+my_recipe_pcs <- recipe(ACTION ~ ., data=AEA_train) %>%
+  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  step_other(all_nominal_predictors(), threshold=0.001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% ### prev recipe
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors(), threshold=0.8) #Threshold is between 0 and 1
 
-amazon_workflow <- workflow() %>%
-add_recipe(my_recipe_penlog) %>%
-add_model(my_mod)
+my_recipe_smote <- recipe(ACTION ~ ., data=AEA_train) %>%
+  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  step_other(all_nominal_predictors(), threshold=0.001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+  step_normalize((all_numeric_predictors())) #%>%
+  step_pca(all_predictors(), threshold=0.8) %>% #Threshold is between 0 and 1
+  step_smote(all_outcomes(), neighbors=2) # also step_upsample() and step_downsample()
+
+my_recipe_best <- recipe(ACTION ~ ., data=AEA_train) %>%
+  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  #step_other(all_nominal_predictors(), threshold=0.001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+  step_normalize((all_numeric_predictors())) #%>%
+  #step_pca(all_predictors(), threshold=0.8) %>% #Threshold is between 0 and 1
+  #step_smote(all_outcomes(), neighbors=2) # also step_upsample() and step_downsample()
+  
+prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+testbake <- bake(prepped_recipe, new_data=AEA_train)
+# submit as predicted probabability of a 1
+
+
+
+
+##################################
+### Logistic Regression ##########
+##################################
+
+# model
+my_mod_log <- logistic_reg() %>% #Type of model
+set_engine("glm")
+
+# workflow
+logistic_workflow <- workflow() %>%
+add_recipe(my_recipe) %>%
+add_model(my_mod_log) %>%
+fit(data = AEA_train) # Fit the workflow
+
+# test predictions
+test_preds <- logistic_workflow %>%
+  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
+  rename(ACTION = .pred_1) %>%
+  bind_cols(., AEA_test) %>%
+  select(id, ACTION)
+
+# save to csv
+vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
+
+
+#################################
+# Penalized Logistic Regression #
+#################################
+
+# model
+my_mod_penlog <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
+  set_engine("glmnet")
+
+penlog_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(my_mod_penlog)
 
 ## Grid of values to tune over
-tuning_grid <- grid_regular(penalty(),
+tuning_grid_penlog <- grid_regular(penalty(),
 mixture(),
 levels = 4) ## L^2 total tuning possibilities
 
-## Split data for CV
-folds <- vfold_cv(AEA_train, v = 5, repeats=1)
-
 ## Run the CV
-CV_results <- amazon_workflow %>%
+CV_results <- penlog_workflow %>%
   tune_grid(resamples=folds,
-            grid=tuning_grid,
+            grid=tuning_grid_penlog,
             metrics=metric_set(roc_auc)) #Or leave metrics NULL
 
-#####PENALIZED LOGISTIC IN R
 ## Find Best Tuning Parameters
 bestTune <- CV_results %>%
   select_best("roc_auc")
 
 ## Finalize the Workflow & fit it
-final_wf <- amazon_workflow %>%
+final_wf <- penlog_workflow %>%
   finalize_workflow(bestTune) %>%
   fit(data=AEA_train)
 
-## Predict
-final_wf %>%
-  predict(new_data = AEA_train, type="prob")
-
 test_preds <- final_wf %>%
-  predict(amazon_workflow, new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
+  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
   rename(ACTION = .pred_1) %>%
   bind_cols(., AEA_test) %>%
   select(id, ACTION)
@@ -248,16 +284,9 @@ test_preds <- knn_wf %>%
 vroom_write(x=test_preds, file="./KnnSubmission.csv", delim=",")
 
 
-# Naive Bayes with pcs
 ###################################
-my_recipe_pcs <- recipe(ACTION ~ ., data=AEA_train) %>%
-  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
-  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  step_other(all_nominal_predictors(), threshold=0.001) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% ##prev recipe
-  step_dummy(all_nominal_predictors()) %>%
-  step_normalize(all_predictors()) %>%
-  step_pca(all_predictors(), threshold=0.8) #Threshold is between 0 and 1
+### Naive Bayes with pcs ##########
+###################################
 
 ## nb model
 nb_model <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
@@ -357,64 +386,6 @@ vroom_write(x=test_preds, file="./NBpcs8Submission.csv", delim=",")
 ### SMOTE Code #################
 ################################
 
-setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
-
-library(tidymodels)
-library(themis) # for smote
-library(vroom)
-library(tidyverse)
-library(embed)
-library(discrim)
-
-# Data
-AEA_train <- vroom("./train.csv")
-AEA_test <- vroom("./test.csv")
-
-my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>%
-  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
-  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  #step_other(all_nominal_predictors(), threshold=0.001) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
-  step_normalize((all_numeric_predictors())) #%>%
-  #step_pca(all_predictors(), threshold=0.8) %>% #Threshold is between 0 and 1
-  #step_mutate_at(all_factor_predictors(), fn = numeric) %>% #Everything numeric for SMOTE so encode it here
-  #step_smote(all_outcomes(), neighbors=2) # also step_upsample() and step_downsample()
-
-best_so_far <- recipe(ACTION ~ ., data=AEA_train) %>%
-  step_mutate(ACTION = as.factor(ACTION), skip = TRUE) %>%
-  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  #step_other(all_nominal_predictors(), threshold=0.001) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
-  step_normalize((all_numeric_predictors())) %>%
-  #step_pca(all_predictors(), threshold=0.8) %>% #Threshold is between 0 and 1
-  #step_mutate_at(all_factor_predictors(), fn = numeric) %>% #Everything numeric for SMOTE so encode it here
-  step_smote(all_outcomes(), neighbors=4) # also step_upsample() and step_downsample()
-
-# apply the recipe to your data
-#prepped_recipe <- prep(my_recipe)
-#baked <- bake(prepped_recipe, new_data = AEA_train)
-
-# folds
-folds <- vfold_cv(AEA_train, v = 5, repeats=1)
-
-#Logistic############################################################
-
-my_mod_log <- logistic_reg() %>% #Type of model
-set_engine("glm")
-
-logistic_workflow <- workflow() %>%
-add_recipe(my_recipe) %>%
-add_model(my_mod_log) %>%
-fit(data = AEA_train) # Fit the workflow
-
-test_preds <- logistic_workflow %>%
-  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-vroom_write(x=test_preds, file="./LogSubmission2.csv", delim=",")
-
 
 #################################
 # Penalized Logistic Regression #
@@ -431,8 +402,6 @@ add_model(my_mod_penlog)
 tuning_grid_penlog <- grid_regular(penalty(),
 mixture(),
 levels = 4) ## L^2 total tuning possibilities
-
-## Split data for CV
 
 ## Run the CV
 CV_results <- penlog_workflow %>%
