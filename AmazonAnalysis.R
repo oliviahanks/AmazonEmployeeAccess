@@ -86,9 +86,9 @@ testbake <- bake(prepped_recipe, new_data=AEA_train)
 
 
 
-##################################
-### Logistic Regression ##########
-##################################
+###################################
+### Logistic Regression ###########
+###################################
 
 # model
 my_mod_log <- logistic_reg() %>% #Type of model
@@ -111,9 +111,9 @@ test_preds <- logistic_workflow %>%
 vroom_write(x=test_preds, file="./LogSubmission.csv", delim=",")
 
 
-#################################
-# Penalized Logistic Regression #
-#################################
+###################################
+### Penalized Logistic Regression #
+###################################
 
 # model
 my_mod_penlog <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
@@ -152,30 +152,29 @@ test_preds <- final_wf %>%
 vroom_write(x=test_preds, file="./PenLogSubmission.csv", delim=",")
 
 
-############
-# RF Binary#
-############
+###################################
+### RF Binary #####################
+###################################
 
+# model
 my_mod_rfbin <- rand_forest(mtry = tune(),
                             min_n=tune(),
-                            trees=1000) %>%
+                            trees=500) %>%
   set_engine("ranger") %>%
   set_mode("classification")
 
-amazon_workflow <- workflow() %>%
-  add_recipe(my_recipe_penlog) %>%
+# workflow
+rfbin_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
   add_model(my_mod_rfbin)
 
-## Create a workflow with model & recipe
-#use my_recipe_penlog as recipe
-
 ## Set up grid of tuning values
-RF_tuning_grid <- grid_regular(mtry(range = c(1, 10)),
-                               min_n())
+RF_tuning_grid <- grid_regular(mtry(range = c(1, 5)), # num of columns used 
+                               min_n(),
+                               levels = 6)
 
 ## Set up K-fold CV
-# use folds from above
-CV_results <- amazon_workflow %>%
+CV_results <- rfbin_workflow %>%
   tune_grid(resamples=folds,
             grid=RF_tuning_grid,
             metrics=metric_set(roc_auc)) #Or leave metrics NULL
@@ -185,23 +184,23 @@ bestTune <- CV_results %>%
   select_best("roc_auc")
 
 ## Finalize workflow and predict
-final_wf <- amazon_workflow %>%
+final_wf <- rfbin_workflow %>%
   finalize_workflow(bestTune) %>%
   fit(data=AEA_train)
 
 ## Predict
 test_preds <- final_wf %>%
-  predict(amazon_workflow, new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
+  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
   rename(ACTION = .pred_1) %>%
   bind_cols(., AEA_test) %>%
   select(id, ACTION)
 
-#vroom_write(x=test_preds, file="./RFBinSubmission.csv", delim=",")
+vroom_write(x=test_preds, file="./RFBinSubmission11.csv", delim=",")
 
 
-###############
-# Naive Bayes #
-###############
+###################################
+### Naive Bayes ###################
+###################################
 
 ## nb model
 nb_model <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
@@ -209,7 +208,7 @@ set_mode("classification") %>%
 set_engine("naivebayes") # install discrim library for the naivebayes eng
 
 nb_wf <- workflow() %>%
-add_recipe(my_recipe_penlog) %>%
+add_recipe(my_recipe) %>%
 add_model(nb_model)
 
 ## Tune smoothness and Laplace here
@@ -217,7 +216,6 @@ NB_tuning_grid <- grid_regular(Laplace(),
                                smoothness())
 
 ## Set up K-fold CV
-# use folds from above
 CV_results <- nb_wf %>%
   tune_grid(resamples=folds,
             grid=NB_tuning_grid,
@@ -228,7 +226,7 @@ bestTune <- CV_results %>%
   select_best("roc_auc")
 
 ## Finalize workflow and predict
-final_wf <- amazon_workflow %>%
+final_wf <- nb_wf %>%
   finalize_workflow(bestTune) %>%
   fit(data=AEA_train)
 
@@ -239,7 +237,8 @@ test_preds <- final_wf %>%
   bind_cols(., AEA_test) %>%
   select(id, ACTION)
 
-#vroom_write(x=test_preds, file="./RFBinSubmission.csv", delim=",")
+vroom_write(x=test_preds, file="./RFBinSubmission.csv", delim=",")
+
 
 ########################
 # KNN Model#
@@ -387,134 +386,11 @@ vroom_write(x=test_preds, file="./NBpcs8Submission.csv", delim=",")
 ################################
 
 
-#################################
-# Penalized Logistic Regression #
-#################################
-
-my_mod_penlog <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
-set_engine("glmnet")
-
-penlog_workflow <- workflow() %>%
-add_recipe(my_recipe) %>%
-add_model(my_mod_penlog)
-
-## Grid of values to tune over
-tuning_grid_penlog <- grid_regular(penalty(),
-mixture(),
-levels = 4) ## L^2 total tuning possibilities
-
-## Run the CV
-CV_results <- penlog_workflow %>%
-  tune_grid(resamples=folds,
-            grid=tuning_grid_penlog,
-            metrics=metric_set(roc_auc)) #Or leave metrics NULL
-
-## Find Best Tuning Parameters
-bestTune <- CV_results %>%
-  select_best("roc_auc")
-
-## Finalize the Workflow & fit it
-final_wf <- penlog_workflow %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=AEA_train)
-
-test_preds <- final_wf %>%
-  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-vroom_write(x=test_preds, file="./PenLogSubmission2.csv", delim=",")
-
-
-############
-# RF Binary#
-############
-
-my_mod_rfbin <- rand_forest(mtry = tune(),
-                            min_n=tune(),
-                            trees=500) %>%
-  set_engine("ranger") %>%
-  set_mode("classification")
-
-rfbin_workflow <- workflow() %>%
-  add_recipe(my_recipe) %>%
-  add_model(my_mod_rfbin)
-
-## Create a workflow with model & recipe
-
-## Set up grid of tuning values
-RF_tuning_grid <- grid_regular(mtry(range = c(1, 5)),
-                               min_n(),
-                               levels = 6)
-
-## Set up K-fold CV
-# use folds from above
-CV_results <- rfbin_workflow %>%
-  tune_grid(resamples=folds,
-            grid=RF_tuning_grid,
-            metrics=metric_set(roc_auc)) #Or leave metrics NULL
-
-## Find best tuning parameters
-bestTune <- CV_results %>%
-  select_best("roc_auc")
-
-## Finalize workflow and predict
-final_wf <- rfbin_workflow %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=AEA_train)
-
-## Predict
-test_preds <- final_wf %>%
-  predict(new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-vroom_write(x=test_preds, file="./RFBinSubmission11.csv", delim=",")
-
-
 ###############
 # Naive Bayes #
 ###############
 
-## nb model
-nb_model <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-set_mode("classification") %>%
-set_engine("naivebayes") # install discrim library for the naivebayes eng
 
-nb_wf <- workflow() %>%
-add_recipe(my_recipe) %>%
-add_model(nb_model)
-
-## Tune smoothness and Laplace here
-NB_tuning_grid <- grid_regular(Laplace(),
-                               smoothness())
-
-## Set up K-fold CV
-# use folds from above
-CV_results <- nb_wf %>%
-  tune_grid(resamples=folds,
-            grid=NB_tuning_grid,
-            metrics=metric_set(roc_auc)) #Or leave metrics NULL
-
-## Find best tuning parameters
-bestTune <- CV_results %>%
-  select_best("roc_auc")
-
-## Finalize workflow and predict
-final_wf <- nb_wf %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=AEA_train)
-
-## Predict
-test_preds <- final_wf %>%
-  predict(amazon_workflow, new_data=AEA_test, type="prob") %>% # "class" or "prob" (see doc)
-  rename(ACTION = .pred_1) %>%
-  bind_cols(., AEA_test) %>%
-  select(id, ACTION)
-
-#vroom_write(x=test_preds, file="./RFBinSubmission.csv", delim=",")
 
 ########################
 # KNN Model#
