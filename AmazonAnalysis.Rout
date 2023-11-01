@@ -1,0 +1,100 @@
+
+R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+Copyright (C) 2023 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> #setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
+> 
+> # Libraries
+> library(vroom)
+> library(tidymodels)
+── Attaching packages ────────────────────────────────────── tidymodels 1.1.1 ──
+✔ broom        1.0.5     ✔ recipes      1.0.8
+✔ dials        1.2.0     ✔ rsample      1.2.0
+✔ dplyr        1.1.3     ✔ tibble       3.2.1
+✔ ggplot2      3.4.3     ✔ tidyr        1.3.0
+✔ infer        1.0.5     ✔ tune         1.1.2
+✔ modeldata    1.2.0     ✔ workflows    1.1.3
+✔ parsnip      1.1.1     ✔ workflowsets 1.0.1
+✔ purrr        1.0.2     ✔ yardstick    1.2.0
+── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
+✖ purrr::discard()  masks scales::discard()
+✖ dplyr::filter()   masks stats::filter()
+✖ dplyr::lag()      masks stats::lag()
+✖ yardstick::spec() masks vroom::spec()
+✖ recipes::step()   masks stats::step()
+• Search for functions across packages at https://www.tidymodels.org/find/
+> library(embed)
+> 
+> # Data
+> AEA_train <- vroom("./train.csv")
+Rows: 32769 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> AEA_test <- vroom("./test.csv")
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> # Columns
+> # ACTION - ACTION is 1 if the resource was approved, 0 if the resource was not
+> # RESOURCE - An ID for each resource
+> # MGR_ID - The EMPLOYEE ID of the manager of the current EMPLOYEE ID record; an employee may have only one manager at a time
+> # ROLE_ROLLUP_1 - Company role grouping category id 1 (e.g. US Engineering)
+> # ROLE_ROLLUP_2 - Company role grouping category id 2 (e.g. US Retail)
+> # ROLE_DEPTNAME - Company role department description (e.g. Retail)
+> # ROLE_TITLE - Company role business title description (e.g. Senior Engineering Retail Manager)
+> # ROLE_FAMILY_DESC - Company role family extended description (e.g. Retail Manager, Software Engineering)
+> # ROLE_FAMILY - Company role family description (e.g. Retail Manager)
+> # ROLE_CODE - Company role code; this code is unique to each role (e.g. Manager)
+> 
+> # Exploratory Plot 1
+> #DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
+> # Exploratory Plot 2
+> #DataExplorer::plot_correlation(AEA_train)
+> 
+> # Recipe
+> my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
++   step_mutate(ACTION = factor(ACTION), skip = TRUE) %>%
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
++   step_other(all_factor_predictors(), threshold = .01) %>%
++   step_dummy(all_nominal_predictors()) #create dummy variables
+>   
+> prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+> testbake <- bake(prepped_recipe, new_data=AEA_train)
+> # submit as predicted probabability of a one
+> 
+> 
+> my_mod <- logistic_reg() %>% #Type of model
++ set_engine("glm")
+> 
+> amazon_workflow <- workflow() %>%
++ add_recipe(my_recipe) %>%
++ add_model(my_mod) %>%
++ fit(data = AEA_train) # Fit the workflow
+> 
+> amazon_predictions <- predict(amazon_workflow
++                               , new_data=AEA_test
++                               , type="prob") # "class" or "prob" (see doc)

@@ -1,4 +1,4 @@
-setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
+#setwd('C:/Users/olivi/OneDrive/Documents/School2023/AmazonEmployeeAccess')
 
 # Libraries
 library(vroom)
@@ -25,9 +25,9 @@ AEA_test <- vroom("./test.csv")
 # ROLE_CODE - Company role code; this code is unique to each role (e.g. Manager)
 
 # Exploratory Plot 1
-DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
+#DataExplorer::plot_histrograms(AEA_train) # histograms of all numerical variables
 # Exploratory Plot 2
-DataExplorer::plot_correlation(AEA_train)
+#DataExplorer::plot_correlation(AEA_train)
 
 # Recipe
 my_recipe <- recipe(ACTION ~ ., data=AEA_train) %>% # Set model formula and dataset
